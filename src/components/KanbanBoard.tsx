@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, X, MoreHorizontal, Pencil, Trash2, Archive, ArchiveRestore, GripVertical, Calendar, Users, MessageSquare, ClipboardList, ChevronDown } from "lucide-react";
+import { Plus, X, MoreHorizontal, Pencil, Trash2, Archive, ArchiveRestore, GripVertical, Calendar, Users, MessageSquare, ClipboardList, ChevronDown, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ECOSYSTEM_MODULES } from "@/lib/modules";
 
 interface KanbanCard {
   id: string;
@@ -16,6 +17,8 @@ interface KanbanCard {
   group_name: string | null;
   conversation_id: string | null;
   ticket_id: string | null;
+  common_error_id: string | null;
+  module: string;
   position: number;
   archived: boolean;
   created_at: string;
@@ -57,18 +60,21 @@ const KanbanBoard = () => {
   const [editColTitle, setEditColTitle] = useState("");
   const [conversations, setConversations] = useState<{ id: string; title: string }[]>([]);
   const [tickets, setTickets] = useState<{ id: string; title: string }[]>([]);
+  const [commonErrors, setCommonErrors] = useState<{ id: string; title: string }[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [colRes, cardRes, convRes, tickRes] = await Promise.all([
+    const [colRes, cardRes, convRes, tickRes, errRes] = await Promise.all([
       supabase.from("kanban_columns").select("*").eq("board_id", BOARD_ID).order("position"),
       supabase.from("kanban_cards").select("*").order("position"),
       supabase.from("conversations").select("id, title").order("updated_at", { ascending: false }),
       supabase.from("support_tickets").select("id, title").order("created_at", { ascending: false }),
+      supabase.from("common_errors").select("id, title").order("created_at", { ascending: false }),
     ]);
     setColumns((colRes.data as any[]) || []);
     setCards((cardRes.data as any[]) || []);
     setConversations(convRes.data || []);
     setTickets(tickRes.data || []);
+    setCommonErrors((errRes.data as any[]) || []);
     setLoading(false);
   }, []);
 
@@ -124,6 +130,9 @@ const KanbanBoard = () => {
       group_name: card.group_name,
       conversation_id: card.conversation_id,
       ticket_id: card.ticket_id,
+      common_error_id: card.common_error_id,
+      module: card.module,
+      column_id: card.column_id,
     } as any).eq("id", card.id);
     setEditingCard(null);
     fetchData();
@@ -252,6 +261,9 @@ const KanbanBoard = () => {
                       {card.group_name && (
                         <p className="text-[10px] text-primary/70 mt-1 flex items-center gap-1"><Users className="w-3 h-3" />{card.group_name}</p>
                       )}
+                      {card.module && card.module !== "Geral" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary inline-block mt-1">{card.module}</span>
+                      )}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {card.due_date && (
                           <span className={`text-[10px] flex items-center gap-0.5 px-1.5 py-0.5 rounded ${isOverdue(card.due_date) ? "bg-destructive/10 text-destructive" : "text-muted-foreground"}`}>
@@ -262,6 +274,7 @@ const KanbanBoard = () => {
                         )}
                         {card.conversation_id && <MessageSquare className="w-3 h-3 text-primary/50" />}
                         {card.ticket_id && <ClipboardList className="w-3 h-3 text-warning/50" />}
+                        {card.common_error_id && <AlertTriangle className="w-3 h-3 text-destructive/50" />}
                         {card.description && <span className="text-[10px] text-muted-foreground">≡</span>}
                       </div>
                     </motion.div>
@@ -458,6 +471,31 @@ const KanbanBoard = () => {
                   >
                     <option value="">Nenhum</option>
                     {tickets.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                  </select>
+                </div>
+
+                {/* Linked Common Error */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Vincular Erro Comum</label>
+                  <select
+                    value={editingCard.common_error_id || ""}
+                    onChange={(e) => setEditingCard({ ...editingCard, common_error_id: e.target.value || null })}
+                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Nenhum</option>
+                    {commonErrors.map(ce => <option key={ce.id} value={ce.id}>{ce.title}</option>)}
+                  </select>
+                </div>
+
+                {/* Module */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Módulo</label>
+                  <select
+                    value={editingCard.module || "Geral"}
+                    onChange={(e) => setEditingCard({ ...editingCard, module: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {ECOSYSTEM_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
 

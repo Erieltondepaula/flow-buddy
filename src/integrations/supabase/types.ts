@@ -35,10 +35,47 @@ export type Database = {
         }
         Relationships: []
       }
+      common_errors: {
+        Row: {
+          checklist: Json | null
+          created_at: string
+          description: string
+          id: string
+          module: string
+          severity: string
+          solution: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json | null
+          created_at?: string
+          description?: string
+          id?: string
+          module?: string
+          severity?: string
+          solution?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json | null
+          created_at?: string
+          description?: string
+          id?: string
+          module?: string
+          severity?: string
+          solution?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       confirmed_solutions: {
         Row: {
           confirmed_at: string
           id: string
+          module: string | null
           problem: string
           solution: string
           usage_count: number
@@ -46,6 +83,7 @@ export type Database = {
         Insert: {
           confirmed_at?: string
           id?: string
+          module?: string | null
           problem: string
           solution: string
           usage_count?: number
@@ -53,6 +91,7 @@ export type Database = {
         Update: {
           confirmed_at?: string
           id?: string
+          module?: string | null
           problem?: string
           solution?: string
           usage_count?: number
@@ -157,6 +196,7 @@ export type Database = {
         Row: {
           archived: boolean
           column_id: string
+          common_error_id: string | null
           conversation_id: string | null
           created_at: string
           description: string | null
@@ -165,6 +205,7 @@ export type Database = {
           id: string
           label: string | null
           label_color: string | null
+          module: string | null
           position: number
           start_date: string | null
           ticket_id: string | null
@@ -174,6 +215,7 @@ export type Database = {
         Insert: {
           archived?: boolean
           column_id: string
+          common_error_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description?: string | null
@@ -182,6 +224,7 @@ export type Database = {
           id?: string
           label?: string | null
           label_color?: string | null
+          module?: string | null
           position?: number
           start_date?: string | null
           ticket_id?: string | null
@@ -191,6 +234,7 @@ export type Database = {
         Update: {
           archived?: boolean
           column_id?: string
+          common_error_id?: string | null
           conversation_id?: string | null
           created_at?: string
           description?: string | null
@@ -199,6 +243,7 @@ export type Database = {
           id?: string
           label?: string | null
           label_color?: string | null
+          module?: string | null
           position?: number
           start_date?: string | null
           ticket_id?: string | null
@@ -211,6 +256,13 @@ export type Database = {
             columns: ["column_id"]
             isOneToOne: false
             referencedRelation: "kanban_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_common_error_id_fkey"
+            columns: ["common_error_id"]
+            isOneToOne: false
+            referencedRelation: "common_errors"
             referencedColumns: ["id"]
           },
           {
@@ -270,6 +322,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          module: string | null
           source_type: string
           title: string
           updated_at: string
@@ -279,6 +332,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          module?: string | null
           source_type?: string
           title: string
           updated_at?: string
@@ -288,6 +342,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          module?: string | null
           source_type?: string
           title?: string
           updated_at?: string
@@ -302,6 +357,7 @@ export type Database = {
           error_description: string
           error_registered_at: string
           id: string
+          module: string | null
           resolved_at: string | null
           solution_description: string | null
           solution_registered_at: string | null
@@ -316,6 +372,7 @@ export type Database = {
           error_description: string
           error_registered_at?: string
           id?: string
+          module?: string | null
           resolved_at?: string | null
           solution_description?: string | null
           solution_registered_at?: string | null
@@ -330,6 +387,7 @@ export type Database = {
           error_description?: string
           error_registered_at?: string
           id?: string
+          module?: string | null
           resolved_at?: string | null
           solution_description?: string | null
           solution_registered_at?: string | null

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import ModuleFilter from "./ModuleFilter";
+import { ECOSYSTEM_MODULES } from "@/lib/modules";
 
 interface Solution {
   id: string;
@@ -11,6 +13,7 @@ interface Solution {
   solution: string;
   confirmed_at: string;
   usage_count: number;
+  module?: string;
 }
 
 const SolutionHistory = () => {
@@ -21,6 +24,8 @@ const SolutionHistory = () => {
   const [newSolution, setNewSolution] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedSolution, setSelectedSolution] = useState<Solution | null>(null);
+  const [moduleFilter, setModuleFilter] = useState("Todos");
+  const [newModule, setNewModule] = useState("Geral");
 
   const fetchSolutions = async () => {
     setLoading(true);
@@ -43,7 +48,8 @@ const SolutionHistory = () => {
     const { error } = await supabase.from("confirmed_solutions").insert({
       problem: newProblem,
       solution: newSolution,
-    });
+      module: newModule,
+    } as any);
     if (!error) {
       toast.success("Solução registrada!");
       setNewProblem("");
@@ -61,8 +67,8 @@ const SolutionHistory = () => {
     if (selectedSolution?.id === id) setSelectedSolution(null);
     fetchSolutions();
   };
-
-  const totalUsage = solutions.reduce((acc, s) => acc + s.usage_count, 0);
+  const filteredSolutions = solutions.filter(s => moduleFilter === "Todos" || s.module === moduleFilter);
+  const totalUsage = filteredSolutions.reduce((acc, s) => acc + s.usage_count, 0);
 
   // Detail view
   if (selectedSolution) {
@@ -140,34 +146,29 @@ const SolutionHistory = () => {
 
       {showAdd && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card rounded-xl p-5 space-y-3">
-          <input
-            value={newProblem}
-            onChange={(e) => setNewProblem(e.target.value)}
-            placeholder="Descreva o problema..."
-            className="w-full px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0"
-          />
-          <input
-            value={newSolution}
-            onChange={(e) => setNewSolution(e.target.value)}
-            placeholder="Descreva a solução confirmada..."
-            className="w-full px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={saving}
-            className="w-full py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-          >
+          <input value={newProblem} onChange={(e) => setNewProblem(e.target.value)} placeholder="Descreva o problema..." className="w-full px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0" />
+          <input value={newSolution} onChange={(e) => setNewSolution(e.target.value)} placeholder="Descreva a solução confirmada..." className="w-full px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0" />
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Módulo</label>
+            <select value={newModule} onChange={(e) => setNewModule(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              {ECOSYSTEM_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <button onClick={handleAdd} disabled={saving} className="w-full py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Salvar
           </button>
         </motion.div>
       )}
 
+      {/* Module Filter */}
+      <ModuleFilter selected={moduleFilter} onChange={setModuleFilter} />
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="glass-card rounded-xl p-4 text-center">
           <CheckCircle2 className="w-6 h-6 text-success mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{solutions.length}</p>
+          <p className="text-2xl font-bold text-foreground">{filteredSolutions.length}</p>
           <p className="text-xs text-muted-foreground">Confirmadas</p>
         </div>
         <div className="glass-card rounded-xl p-4 text-center">
@@ -177,7 +178,7 @@ const SolutionHistory = () => {
         </div>
         <div className="glass-card rounded-xl p-4 text-center">
           <TrendingUp className="w-6 h-6 text-info mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{solutions.length > 0 ? "Ativa" : "—"}</p>
+          <p className="text-2xl font-bold text-foreground">{filteredSolutions.length > 0 ? "Ativa" : "—"}</p>
           <p className="text-xs text-muted-foreground">Memória IA</p>
         </div>
       </div>
@@ -193,7 +194,7 @@ const SolutionHistory = () => {
         </p>
       ) : (
         <div className="space-y-2">
-          {solutions.map((sol, index) => (
+          {filteredSolutions.map((sol, index) => (
             <motion.button
               key={sol.id}
               initial={{ opacity: 0, x: -10 }}
