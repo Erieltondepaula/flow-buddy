@@ -1,93 +1,132 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  timestamp: Date;
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content:
-      "Olá! Sou o Especialista de Suporte Técnico do **Amigo Flow**. Posso ajudá-lo com:\n\n• Configuração de canais e templates\n• Diagnóstico de erros comuns\n• Otimização de fluxos de atendimento\n• Dúvidas sobre Leads, Pacientes, Agentes e Setores\n\nComo posso ajudar você hoje?",
-    timestamp: new Date(),
-  },
-];
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 const ChatPanel = () => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "1",
+      role: "assistant",
+      content:
+        "Olá! Sou o **Especialista de Suporte Técnico do Amigo Flow**. Posso ajudá-lo com:\n\n• Configuração de canais e templates\n• Diagnóstico de erros comuns\n• Otimização de fluxos de atendimento\n• Dúvidas sobre Leads, Pacientes, Agentes e Setores\n\nComo posso ajudar você hoje?",
+    },
+  ]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const simulateResponse = (userMsg: string) => {
-    setIsTyping(true);
-    setTimeout(() => {
-      let response = "";
-
-      if (userMsg.toLowerCase().includes("confirmação")) {
-        response =
-          "⚠️ **Confirmação automática não funciona?**\n\nA confirmação automática depende obrigatoriamente de um **Agente habilitado**. Verifique:\n\n1. Se o Agente está ativo no painel\n2. Se o Setor Principal foi definido\n3. Se o canal está corretamente vinculado\n\n✅ *Solução confirmada em 12/02/2026*";
-      } else if (userMsg.toLowerCase().includes("canal") || userMsg.toLowerCase().includes("erro")) {
-        response =
-          "🔧 **Erro ao criar canal**\n\nÉ obrigatório definir um **Setor Principal** antes de criar qualquer canal.\n\n**Checklist de validação:**\n- ✅ Unidade habilitada\n- ✅ Profissional habilitado\n- ✅ Convênio habilitado\n- ✅ Setor configurado\n\nSe algum desses itens estiver ausente, o canal não será criado corretamente.";
-      } else if (userMsg.toLowerCase().includes("template") || userMsg.toLowerCase().includes("meta")) {
-        response =
-          "📋 **Templates e Meta**\n\nExistem dois tipos principais:\n\n• **Marketing**: Exige resposta do paciente. Tem custos de mensageria associados.\n• **Atendimento/Utilidade**: Para avisos e notificações.\n\n⚠️ Templates rejeitados pela Meta geralmente violam as políticas de conteúdo. Revise o texto e tente novamente.";
-      } else if (userMsg.toLowerCase().includes("lead") || userMsg.toLowerCase().includes("paciente")) {
-        response =
-          "👥 **Leads vs Pacientes**\n\nNúmeros **não cadastrados** no sistema são tratados como **Leads**. Eles podem seguir regras de atendimento diferentes.\n\nPara converter um Lead em Paciente:\n1. Cadastre o número no sistema\n2. Vincule ao convênio\n3. Associe à unidade correta";
-      } else {
-        response =
-          "Entendi sua dúvida. Para que eu possa ajudar da melhor forma, por favor:\n\n1. Descreva o erro ou situação em detalhes\n2. Se possível, envie prints da tela\n3. Informe a unidade e o canal utilizado\n\nAssim posso consultar a Base de Conhecimento e fornecer a solução mais precisa.";
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: response,
-          timestamp: new Date(),
-        },
-      ]);
-      setIsTyping(false);
-    }, 1500);
-  };
-
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: input,
-      timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput("");
-    simulateResponse(input);
-  };
+    setIsLoading(true);
 
-  const formatContent = (content: string) => {
-    return content.split("\n").map((line, i) => {
-      let formatted = line
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>');
-      return (
-        <span key={i} dangerouslySetInnerHTML={{ __html: formatted }} className="block" />
+    let assistantSoFar = "";
+
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(errorData.error || `Erro ${resp.status}`);
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let streamDone = false;
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") {
+            streamDone = true;
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantSoFar += content;
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && last.id === "streaming") {
+                  return prev.map((m, i) =>
+                    i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
+                  );
+                }
+                return [...prev, { id: "streaming", role: "assistant", content: assistantSoFar }];
+              });
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Finalize streaming message with proper id
+      setMessages((prev) =>
+        prev.map((m) => (m.id === "streaming" ? { ...m, id: Date.now().toString() } : m))
       );
-    });
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `⚠️ ${e instanceof Error ? e.message : "Erro ao conectar com a IA. Tente novamente."}`,
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -95,9 +134,7 @@ const ChatPanel = () => {
       {/* Header */}
       <div className="px-6 py-4 border-b border-border bg-card">
         <h2 className="text-lg font-semibold text-foreground">Chat de Suporte</h2>
-        <p className="text-sm text-muted-foreground">
-          Especialista de Suporte Técnico Sênior
-        </p>
+        <p className="text-sm text-muted-foreground">Especialista de Suporte Técnico Sênior • IA Ativa</p>
       </div>
 
       {/* Messages */}
@@ -123,7 +160,13 @@ const ChatPanel = () => {
                     : "bg-card border border-border text-card-foreground rounded-bl-md"
                 }`}
               >
-                {formatContent(msg.content)}
+                {msg.role === "assistant" ? (
+                  <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-foreground">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
               </div>
               {msg.role === "user" && (
                 <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0 mt-1">
@@ -134,12 +177,8 @@ const ChatPanel = () => {
           ))}
         </AnimatePresence>
 
-        {isTyping && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-3"
-          >
+        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
               <Bot className="w-4 h-4 text-primary-foreground" />
             </div>
@@ -161,11 +200,12 @@ const ChatPanel = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Descreva o erro ou dúvida..."
-            className="flex-1 px-4 py-3 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0"
+            disabled={isLoading}
+            className="flex-1 px-4 py-3 rounded-xl bg-secondary text-secondary-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0 disabled:opacity-50"
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isLoading}
             className="px-4 py-3 rounded-xl gradient-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
           >
             <Send className="w-5 h-5" />
