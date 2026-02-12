@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import ChatPanel from "@/components/ChatPanel";
+import ConversationList from "@/components/ConversationList";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import CommonErrors from "@/components/CommonErrors";
 import SolutionHistory from "@/components/SolutionHistory";
@@ -8,11 +9,37 @@ import TicketsPanel from "@/components/TicketsPanel";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("chat");
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+
+  const handleConversationCreated = useCallback((id: string) => {
+    setActiveConversationId(id);
+    // Trigger conversation list refresh
+    (window as any).__refetchConversations?.();
+  }, []);
+
+  const handleConversationUpdated = useCallback(() => {
+    (window as any).__refetchConversations?.();
+  }, []);
 
   const renderContent = () => {
     switch (activeTab) {
       case "chat":
-        return <ChatPanel />;
+        return (
+          <div className="flex h-full">
+            <ConversationList
+              activeConversationId={activeConversationId}
+              onSelectConversation={setActiveConversationId}
+            />
+            <div className="flex-1">
+              <ChatPanel
+                key={activeConversationId || "new"}
+                conversationId={activeConversationId}
+                onConversationCreated={handleConversationCreated}
+                onConversationUpdated={handleConversationUpdated}
+              />
+            </div>
+          </div>
+        );
       case "tickets":
         return <TicketsPanel />;
       case "knowledge":
@@ -22,7 +49,7 @@ const Index = () => {
       case "history":
         return <SolutionHistory />;
       default:
-        return <ChatPanel />;
+        return null;
     }
   };
 
