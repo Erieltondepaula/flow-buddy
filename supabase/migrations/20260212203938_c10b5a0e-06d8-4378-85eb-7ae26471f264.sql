@@ -1,0 +1,1 @@
+ALTER TABLE public.conversations ADD COLUMN group_name text DEFAULT null;

@@ -9,6 +9,7 @@ interface Conversation {
   status: string;
   created_at: string;
   updated_at: string;
+  group_name?: string | null;
 }
 
 interface ConversationListProps {
@@ -115,6 +116,9 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
                     <StatusIcon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${statusColors[conv.status]}`} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground truncate">{conv.title}</p>
+                      {conv.group_name && (
+                        <p className="text-[10px] text-primary/70 truncate">👥 {conv.group_name}</p>
+                      )}
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</span>
                         <span className={`text-xs ${statusColors[conv.status]}`}>{statusLabels[conv.status]}</span>

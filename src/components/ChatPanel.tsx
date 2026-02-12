@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, User, Loader2, Paperclip, X, CheckCircle2, XCircle, AlertTriangle, Plus, Copy, Pencil, Check } from "lucide-react";
+import { Send, Bot, User, Loader2, Paperclip, X, CheckCircle2, XCircle, AlertTriangle, Plus, Copy, Pencil, Check, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +48,9 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
   const [attemptCount, setAttemptCount] = useState(0);
   const [currentConvId, setCurrentConvId] = useState<string | null>(conversationId);
   const [loadingConv, setLoadingConv] = useState(false);
+  const [groupName, setGroupName] = useState<string>("");
+  const [editingGroup, setEditingGroup] = useState(false);
+  const [groupInput, setGroupInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +64,8 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
       setCurrentTicketId(null);
       setCurrentConvId(null);
       setAttemptCount(0);
+      setGroupName("");
+      setEditingGroup(false);
     }
   }, [conversationId]);
 
@@ -84,6 +89,7 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
       else if (conv.status === "escalated") setTicketState("escalated");
       else setTicketState("idle");
       setCurrentTicketId(conv.ticket_id as string | null);
+      setGroupName((conv as any).group_name || "");
     }
 
     // Load messages
@@ -537,6 +543,56 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
             {ticketState === "resolved" && " • ✅ Resolvido"}
             {ticketState === "escalated" && " • 🔧 Escalado"}
           </p>
+        </div>
+        {/* Group Name */}
+        <div className="flex items-center gap-2">
+          {editingGroup ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={groupInput}
+                onChange={(e) => setGroupInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const newName = groupInput.trim();
+                    setGroupName(newName);
+                    setEditingGroup(false);
+                    if (currentConvId) {
+                      supabase.from("conversations").update({ group_name: newName || null } as any).eq("id", currentConvId).then(() => onConversationUpdated?.());
+                    }
+                  }
+                }}
+                placeholder="Nome do grupo..."
+                autoFocus
+                className="px-2.5 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring w-40"
+              />
+              <button
+                onClick={() => {
+                  const newName = groupInput.trim();
+                  setGroupName(newName);
+                  setEditingGroup(false);
+                  if (currentConvId) {
+                    supabase.from("conversations").update({ group_name: newName || null } as any).eq("id", currentConvId).then(() => onConversationUpdated?.());
+                  }
+                }}
+                className="p-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setEditingGroup(false)} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setGroupInput(groupName); setEditingGroup(true); }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary text-xs text-secondary-foreground hover:bg-muted transition-colors"
+              title="Definir nome do grupo"
+            >
+              <Users className="w-3.5 h-3.5" />
+              {groupName ? <span className="font-medium">{groupName}</span> : <span className="text-muted-foreground">Grupo</span>}
+            </button>
+          )}
         </div>
       </div>
 
