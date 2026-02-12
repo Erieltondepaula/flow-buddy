@@ -352,6 +352,39 @@ export type Database = {
         }
         Relationships: []
       }
+      module_contacts: {
+        Row: {
+          created_at: string
+          id: string
+          module: string | null
+          name: string
+          phone: string | null
+          role: string | null
+          sector: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module?: string | null
+          name: string
+          phone?: string | null
+          role?: string | null
+          sector: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module?: string | null
+          name?: string
+          phone?: string | null
+          role?: string | null
+          sector?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       support_tickets: {
         Row: {
           attachments: Json | null
