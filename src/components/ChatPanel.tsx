@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, User, Loader2, Paperclip, X, CheckCircle2, XCircle, AlertTriangle, Plus } from "lucide-react";
+import { Send, Bot, User, Loader2, Paperclip, X, CheckCircle2, XCircle, AlertTriangle, Plus, Copy, Pencil, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -429,6 +429,93 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
     switch (type) { case "image": return "🖼️"; case "audio": return "🎵"; case "video": return "🎬"; default: return "📄"; }
   };
 
+  // Extract client response template from message content (text inside > blockquotes after "Modelo de resposta")
+  const extractClientTemplate = (content: string): string | null => {
+    const lines = content.split("\n");
+    let inTemplate = false;
+    const templateLines: string[] = [];
+    for (const line of lines) {
+      if (line.toLowerCase().includes("modelo de resposta")) { inTemplate = true; continue; }
+      if (inTemplate && line.startsWith("> ")) {
+        templateLines.push(line.replace(/^>\s*/, ""));
+      } else if (inTemplate && templateLines.length > 0 && line.trim() === "") {
+        continue;
+      } else if (inTemplate && templateLines.length > 0 && !line.startsWith(">")) {
+        break;
+      }
+    }
+    return templateLines.length > 0 ? templateLines.join("\n") : null;
+  };
+
+  const MessageActions = ({ content }: { content: string }) => {
+    const [copied, setCopied] = useState(false);
+    const [copiedTemplate, setCopiedTemplate] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState(false);
+    const [templateText, setTemplateText] = useState("");
+    const template = extractClientTemplate(content);
+
+    const copyAll = () => {
+      // Strip markdown formatting for plain text copy
+      const plain = content.replace(/\*\*/g, "").replace(/^#+\s/gm, "").replace(/^>\s/gm, "").replace(/^-\s/gm, "• ");
+      navigator.clipboard.writeText(plain);
+      setCopied(true);
+      toast.success("Resposta copiada!");
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    const copyTemplate = () => {
+      navigator.clipboard.writeText(editingTemplate ? templateText : (template || ""));
+      setCopiedTemplate(true);
+      toast.success("Modelo copiado! Cole no WhatsApp 📱");
+      setTimeout(() => setCopiedTemplate(false), 2000);
+    };
+
+    const startEditTemplate = () => {
+      setTemplateText(template || "");
+      setEditingTemplate(true);
+    };
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-1">
+          <button onClick={copyAll} className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+            {copied ? "Copiado" : "Copiar tudo"}
+          </button>
+          {template && (
+            <>
+              <button onClick={copyTemplate} className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-primary hover:bg-primary/10 transition-colors font-medium">
+                {copiedTemplate ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                {copiedTemplate ? "Copiado!" : "📋 Copiar modelo p/ cliente"}
+              </button>
+              <button onClick={startEditTemplate} className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <Pencil className="w-3 h-3" /> Editar modelo
+              </button>
+            </>
+          )}
+        </div>
+        {editingTemplate && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2">
+            <textarea
+              value={templateText}
+              onChange={(e) => setTemplateText(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+            <div className="flex gap-2">
+              <button onClick={copyTemplate} className="flex items-center gap-1 px-3 py-1.5 rounded-lg gradient-primary text-primary-foreground text-xs font-medium">
+                <Copy className="w-3 h-3" /> Copiar editado
+              </button>
+              <button onClick={() => setEditingTemplate(false)} className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs">
+                Fechar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    );
+  };
+
   if (loadingConv) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -497,11 +584,15 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
                       : "bg-card border border-border text-card-foreground rounded-bl-md"
                   }`}>
                     {msg.role === "assistant" ? (
-                      <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-foreground">
+                      <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-foreground prose-blockquote:border-primary/30 prose-blockquote:bg-primary/5 prose-blockquote:rounded-lg prose-blockquote:px-3 prose-blockquote:py-2">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     ) : msg.content}
                   </div>
+                )}
+                {/* Action buttons for assistant messages */}
+                {msg.role === "assistant" && msg.id !== "welcome" && msg.content && (
+                  <MessageActions content={msg.content} />
                 )}
                 {msg.timestamp && msg.id !== "welcome" && (
                   <p className={`text-[10px] mt-0.5 ${
