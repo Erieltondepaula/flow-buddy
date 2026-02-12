@@ -22,6 +22,7 @@ interface Message {
 type TicketState = "idle" | "diagnosing" | "awaiting_confirmation" | "resolved" | "escalated";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const TRANSCRIBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`;
 
 interface ChatPanelProps {
   conversationId: string | null;
@@ -315,9 +316,41 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
     }
 
     try {
+      // Transcribe any audio attachments
+      const audioAttachments = userMessage.attachments?.filter(a => a.type === "audio") || [];
+      let transcriptions = "";
+      if (audioAttachments.length > 0) {
+        for (const audio of audioAttachments) {
+          try {
+            const transcResp = await fetch(TRANSCRIBE_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+              body: JSON.stringify({ audioUrl: audio.url }),
+            });
+            const transcData = await transcResp.json();
+            if (transcData.transcription) {
+              transcriptions += `\n[Transcrição do áudio "${audio.name}"]: ${transcData.transcription}`;
+              // Show transcription in chat as a system note
+              const transcMsg: Message = {
+                id: `transc-${Date.now()}`,
+                role: "assistant",
+                content: `🎙️ **Transcrição do áudio "${audio.name}":**\n\n${transcData.transcription}`,
+                timestamp: new Date().toISOString(),
+              };
+              setMessages(prev => [...prev, transcMsg]);
+              if (convId) await saveMessage(convId, transcMsg);
+            }
+          } catch (err) {
+            console.error("Transcription error:", err);
+            toast.error(`Não foi possível transcrever o áudio "${audio.name}"`);
+          }
+        }
+      }
+
       const aiMessages = newMessages.map((m) => {
         let content = m.content;
         if (m.attachments?.length) content += "\n[Anexos: " + m.attachments.map((a) => `${a.type}: ${a.name}`).join(", ") + "]";
+        if (m.id === userMessage.id && transcriptions) content += transcriptions;
         return { role: m.role, content };
       });
 
