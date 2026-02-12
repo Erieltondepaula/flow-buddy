@@ -14,7 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
+      confirmed_solutions: {
+        Row: {
+          confirmed_at: string
+          id: string
+          problem: string
+          solution: string
+          usage_count: number
+        }
+        Insert: {
+          confirmed_at?: string
+          id?: string
+          problem: string
+          solution: string
+          usage_count?: number
+        }
+        Update: {
+          confirmed_at?: string
+          id?: string
+          problem?: string
+          solution?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
+      knowledge_entries: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          source_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          source_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          source_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

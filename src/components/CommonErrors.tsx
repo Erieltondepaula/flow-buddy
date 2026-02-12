@@ -1,57 +1,53 @@
-import { AlertTriangle, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
-import { useState } from "react";
+import { AlertTriangle, CheckCircle2, ArrowRight, Plus, X, Loader2, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-const errors = [
+interface ErrorEntry {
+  id: string;
+  title: string;
+  content: string;
+  source_type: string;
+  created_at: string;
+}
+
+// Keep displaying preset common errors + knowledge entries tagged as errors
+const presetErrors = [
   {
-    id: 1,
+    id: "preset-1",
     title: "Confirmação automática não funciona",
     severity: "high",
-    solution:
-      "A confirmação automática depende obrigatoriamente de um Agente habilitado. Verifique se o Agente está ativo, se o Setor Principal foi definido e se o canal está vinculado.",
+    solution: "A confirmação automática depende obrigatoriamente de um Agente habilitado.",
     checklist: ["Agente habilitado", "Setor Principal definido", "Canal vinculado"],
-    solvedAt: "12/02/2026",
   },
   {
-    id: 2,
+    id: "preset-2",
     title: "Erro ao criar canal",
     severity: "high",
-    solution:
-      "É obrigatório definir um Setor Principal antes de criar qualquer canal. Sem isso, a criação falhará silenciosamente.",
+    solution: "É obrigatório definir um Setor Principal antes de criar qualquer canal.",
     checklist: ["Unidade habilitada", "Profissional habilitado", "Setor configurado"],
-    solvedAt: "11/02/2026",
   },
   {
-    id: 3,
+    id: "preset-3",
     title: "Template rejeitado pela Meta",
     severity: "medium",
-    solution:
-      "Verifique o tipo do template: Marketing exige resposta do paciente e tem custos de mensageria. Atendimento/Utilidade serve para avisos. Revise o conteúdo conforme políticas da Meta.",
+    solution: "Verifique o tipo do template: Marketing exige resposta do paciente. Atendimento/Utilidade serve para avisos.",
     checklist: ["Tipo correto selecionado", "Conteúdo conforme políticas", "Custos revisados"],
-    solvedAt: "10/02/2026",
   },
   {
-    id: 4,
+    id: "preset-4",
     title: "Agendamento não aparece",
     severity: "medium",
-    solution:
-      "Verifique se o tipo de atendimento, profissional e convênio estão habilitados. Importante: essas configurações devem ser feitas ANTES da configuração nas Habilidades.",
-    checklist: [
-      "Tipo de atendimento habilitado",
-      "Profissional habilitado",
-      "Convênio ativo",
-      "Habilidades configuradas após habilitação",
-    ],
-    solvedAt: "09/02/2026",
+    solution: "Verifique se tipo de atendimento, profissional e convênio estão habilitados ANTES de configurar Habilidades.",
+    checklist: ["Tipo de atendimento habilitado", "Profissional habilitado", "Convênio ativo"],
   },
   {
-    id: 5,
+    id: "preset-5",
     title: "Leads não recebem mensagens",
     severity: "low",
-    solution:
-      "Números não cadastrados são tratados como Leads e podem seguir regras diferentes de atendimento. Verifique as regras de atendimento para Leads no painel de configuração.",
+    solution: "Números não cadastrados são tratados como Leads e seguem regras diferentes.",
     checklist: ["Regras de Leads configuradas", "Canal aceita Leads", "Template para Leads definido"],
-    solvedAt: "08/02/2026",
   },
 ];
 
@@ -68,19 +64,19 @@ const severityLabels: Record<string, string> = {
 };
 
 const CommonErrors = () => {
-  const [expandedError, setExpandedError] = useState<number | null>(null);
+  const [expandedError, setExpandedError] = useState<string | null>(null);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 h-full overflow-y-auto">
       <div>
         <h2 className="text-xl font-bold text-foreground">Erros Comuns</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Soluções validadas e confirmadas pela equipe técnica
+          Soluções validadas para os problemas mais frequentes
         </p>
       </div>
 
       <div className="space-y-3">
-        {errors.map((error, index) => (
+        {presetErrors.map((error, index) => (
           <motion.div
             key={error.id}
             initial={{ opacity: 0, y: 10 }}
@@ -89,28 +85,17 @@ const CommonErrors = () => {
             className="glass-card rounded-xl overflow-hidden"
           >
             <button
-              onClick={() =>
-                setExpandedError(expandedError === error.id ? null : error.id)
-              }
+              onClick={() => setExpandedError(expandedError === error.id ? null : error.id)}
               className="w-full p-4 text-left"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
                   <div>
-                    <h3 className="font-semibold text-sm text-card-foreground">
-                      {error.title}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full border ${severityColors[error.severity]}`}
-                      >
-                        {severityLabels[error.severity]}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Resolvido em {error.solvedAt}
-                      </span>
-                    </div>
+                    <h3 className="font-semibold text-sm text-card-foreground">{error.title}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${severityColors[error.severity]}`}>
+                      {severityLabels[error.severity]}
+                    </span>
                   </div>
                 </div>
                 <ArrowRight
@@ -129,7 +114,7 @@ const CommonErrors = () => {
               >
                 <p className="text-sm text-muted-foreground mt-3">{error.solution}</p>
                 <div className="mt-3 space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Checklist de Validação:</p>
+                  <p className="text-xs font-semibold text-foreground">Checklist:</p>
                   {error.checklist.map((item) => (
                     <div key={item} className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
