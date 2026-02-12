@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import ModuleFilter from "./ModuleFilter";
+import { ECOSYSTEM_MODULES } from "@/lib/modules";
 
 interface Attachment {
   name: string;
@@ -17,6 +19,7 @@ interface KnowledgeEntry {
   source_type: string;
   created_at: string;
   attachments?: Attachment[];
+  module?: string;
 }
 
 const KnowledgeBase = () => {
@@ -31,6 +34,8 @@ const KnowledgeBase = () => {
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [newAttachments, setNewAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [moduleFilter, setModuleFilter] = useState("Todos");
+  const [newModule, setNewModule] = useState("Geral");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchEntries = async () => {
@@ -81,10 +86,11 @@ const KnowledgeBase = () => {
       content: newContent || `[${newAttachments.length} anexo(s)]`,
       source_type: newType,
       attachments: newAttachments,
+      module: newModule,
     } as any);
     if (!error) {
       toast.success("Conhecimento adicionado com sucesso!");
-      setNewTitle(""); setNewContent(""); setNewAttachments([]); setShowAddForm(false);
+      setNewTitle(""); setNewContent(""); setNewAttachments([]); setShowAddForm(false); setNewModule("Geral");
       fetchEntries();
     } else { toast.error("Erro ao salvar"); }
     setSaving(false);
@@ -96,7 +102,8 @@ const KnowledgeBase = () => {
   };
 
   const filteredEntries = entries.filter(
-    (e) => e.title.toLowerCase().includes(search.toLowerCase()) || e.content.toLowerCase().includes(search.toLowerCase())
+    (e) => (moduleFilter === "Todos" || e.module === moduleFilter) &&
+      (e.title.toLowerCase().includes(search.toLowerCase()) || e.content.toLowerCase().includes(search.toLowerCase()))
   );
 
   const typeLabels: Record<string, string> = { text: "Texto", url: "URL / Site", document: "Documento" };
@@ -128,6 +135,13 @@ const KnowledgeBase = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Módulo</label>
+              <select value={newModule} onChange={(e) => setNewModule(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {ECOSYSTEM_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
 
             <div>
@@ -176,6 +190,9 @@ const KnowledgeBase = () => {
         )}
       </AnimatePresence>
 
+      {/* Module Filter */}
+      <ModuleFilter selected={moduleFilter} onChange={setModuleFilter} />
+
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar na base de conhecimento..." className="w-full pl-11 pr-4 py-3 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -204,7 +221,7 @@ const KnowledgeBase = () => {
                     <div>
                       <h3 className="font-semibold text-sm text-card-foreground">{entry.title}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {typeLabels[entry.source_type]} • {new Date(entry.created_at).toLocaleDateString("pt-BR")}
+                        {typeLabels[entry.source_type]} • {entry.module && entry.module !== "Geral" ? `${entry.module} • ` : ""}{new Date(entry.created_at).toLocaleDateString("pt-BR")}
                         {entry.attachments && entry.attachments.length > 0 && ` • ${entry.attachments.length} anexo(s)`}
                       </p>
                     </div>
