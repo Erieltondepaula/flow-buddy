@@ -4,6 +4,7 @@ import ChatPanel from "@/components/ChatPanel";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import CommonErrors from "@/components/CommonErrors";
 import SolutionHistory from "@/components/SolutionHistory";
+import TicketsPanel from "@/components/TicketsPanel";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("chat");
@@ -12,6 +13,8 @@ const Index = () => {
     switch (activeTab) {
       case "chat":
         return <ChatPanel />;
+      case "tickets":
+        return <TicketsPanel />;
       case "knowledge":
         return <KnowledgeBase />;
       case "errors":

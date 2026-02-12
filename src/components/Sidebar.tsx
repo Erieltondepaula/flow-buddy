@@ -1,4 +1,4 @@
-import { MessageSquare, BookOpen, AlertTriangle, History, Settings, HelpCircle, Zap } from "lucide-react";
+import { MessageSquare, BookOpen, AlertTriangle, History, ClipboardList, HelpCircle, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SidebarProps {
@@ -8,6 +8,7 @@ interface SidebarProps {
 
 const navItems = [
   { id: "chat", label: "Chat Suporte", icon: MessageSquare },
+  { id: "tickets", label: "Tickets", icon: ClipboardList },
   { id: "knowledge", label: "Base de Conhecimento", icon: BookOpen },
   { id: "errors", label: "Erros Comuns", icon: AlertTriangle },
   { id: "history", label: "Soluções Registradas", icon: History },
@@ -16,7 +17,6 @@ const navItems = [
 const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
   return (
     <aside className="w-72 gradient-sidebar flex flex-col h-screen fixed left-0 top-0 z-50">
-      {/* Logo */}
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
@@ -29,7 +29,6 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
@@ -58,7 +57,6 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-sidebar-accent/30">
           <HelpCircle className="w-5 h-5 text-sidebar-primary" />
