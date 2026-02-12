@@ -1,4 +1,4 @@
-import { MessageSquare, BookOpen, AlertTriangle, History, ClipboardList, HelpCircle, Zap } from "lucide-react";
+import { MessageSquare, BookOpen, AlertTriangle, History, ClipboardList, HelpCircle, Zap, LayoutDashboard } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SidebarProps {
@@ -8,6 +8,7 @@ interface SidebarProps {
 
 const navItems = [
   { id: "chat", label: "Chat Suporte", icon: MessageSquare },
+  { id: "kanban", label: "Quadro Kanban", icon: LayoutDashboard },
   { id: "tickets", label: "Tickets", icon: ClipboardList },
   { id: "knowledge", label: "Base de Conhecimento", icon: BookOpen },
   { id: "errors", label: "Erros Comuns", icon: AlertTriangle },

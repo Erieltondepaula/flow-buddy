@@ -6,6 +6,7 @@ import KnowledgeBase from "@/components/KnowledgeBase";
 import CommonErrors from "@/components/CommonErrors";
 import SolutionHistory from "@/components/SolutionHistory";
 import TicketsPanel from "@/components/TicketsPanel";
+import KanbanBoard from "@/components/KanbanBoard";
 import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
@@ -59,6 +60,8 @@ const Index = () => {
         );
       case "tickets":
         return <TicketsPanel />;
+      case "kanban":
+        return <KanbanBoard />;
       case "knowledge":
         return <KnowledgeBase />;
       case "errors":
