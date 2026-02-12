@@ -86,6 +86,51 @@ export type Database = {
         }
         Relationships: []
       }
+      support_tickets: {
+        Row: {
+          attachments: Json | null
+          conversation: Json
+          created_at: string
+          error_description: string
+          error_registered_at: string
+          id: string
+          resolved_at: string | null
+          solution_description: string | null
+          solution_registered_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json | null
+          conversation?: Json
+          created_at?: string
+          error_description: string
+          error_registered_at?: string
+          id?: string
+          resolved_at?: string | null
+          solution_description?: string | null
+          solution_registered_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json | null
+          conversation?: Json
+          created_at?: string
+          error_description?: string
+          error_registered_at?: string
+          id?: string
+          resolved_at?: string | null
+          solution_description?: string | null
+          solution_registered_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
