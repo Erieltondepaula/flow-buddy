@@ -324,6 +324,7 @@ export type Database = {
           id: string
           module: string | null
           source_type: string
+          sub_module: string | null
           title: string
           updated_at: string
         }
@@ -334,6 +335,7 @@ export type Database = {
           id?: string
           module?: string | null
           source_type?: string
+          sub_module?: string | null
           title: string
           updated_at?: string
         }
@@ -344,6 +346,7 @@ export type Database = {
           id?: string
           module?: string | null
           source_type?: string
+          sub_module?: string | null
           title?: string
           updated_at?: string
         }
