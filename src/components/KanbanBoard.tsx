@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, X, MoreHorizontal, Pencil, Trash2, Archive, ArchiveRestore, GripVertical, Calendar, Users, MessageSquare, ClipboardList, ChevronDown, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, X, Pencil, Trash2, Archive, ArchiveRestore, GripVertical, Calendar, Users, MessageSquare, ClipboardList, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -42,6 +42,11 @@ const LABEL_COLORS = [
   { name: "Rosa", value: "#ec4899" },
 ];
 
+const COLUMN_COLORS = [
+  "#6b7280", "#ef4444", "#f97316", "#eab308", "#22c55e",
+  "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#f43f5e",
+];
+
 const BOARD_ID = "00000000-0000-0000-0000-000000000001";
 
 const KanbanBoard = () => {
@@ -55,9 +60,12 @@ const KanbanBoard = () => {
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [draggedCard, setDraggedCard] = useState<string | null>(null);
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [dragOverColPosition, setDragOverColPosition] = useState<string | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [editColTitle, setEditColTitle] = useState("");
+  const [colorPickerCol, setColorPickerCol] = useState<string | null>(null);
   const [conversations, setConversations] = useState<{ id: string; title: string }[]>([]);
   const [tickets, setTickets] = useState<{ id: string; title: string }[]>([]);
   const [commonErrors, setCommonErrors] = useState<{ id: string; title: string }[]>([]);
@@ -96,6 +104,12 @@ const KanbanBoard = () => {
     fetchData();
   };
 
+  const updateColumnColor = async (id: string, color: string) => {
+    await supabase.from("kanban_columns").update({ color } as any).eq("id", id);
+    setColorPickerCol(null);
+    fetchData();
+  };
+
   const deleteColumn = async (id: string) => {
     const colCards = cards.filter(c => c.column_id === id);
     if (colCards.length > 0) { toast.error("Remova todos os cards desta coluna primeiro"); return; }
@@ -121,18 +135,10 @@ const KanbanBoard = () => {
 
   const updateCard = async (card: KanbanCard) => {
     await supabase.from("kanban_cards").update({
-      title: card.title,
-      description: card.description,
-      label: card.label,
-      label_color: card.label_color,
-      start_date: card.start_date,
-      due_date: card.due_date,
-      group_name: card.group_name,
-      conversation_id: card.conversation_id,
-      ticket_id: card.ticket_id,
-      common_error_id: card.common_error_id,
-      module: card.module,
-      column_id: card.column_id,
+      title: card.title, description: card.description, label: card.label, label_color: card.label_color,
+      start_date: card.start_date, due_date: card.due_date, group_name: card.group_name,
+      conversation_id: card.conversation_id, ticket_id: card.ticket_id, common_error_id: card.common_error_id,
+      module: card.module, column_id: card.column_id,
     } as any).eq("id", card.id);
     setEditingCard(null);
     fetchData();
@@ -153,9 +159,9 @@ const KanbanBoard = () => {
     toast.success(card.archived ? "Card restaurado" : "Card arquivado");
   };
 
-  // === Drag & Drop ===
+  // === Card Drag & Drop ===
   const handleDragStart = (cardId: string) => setDraggedCard(cardId);
-  const handleDragOver = (e: React.DragEvent, colId: string) => { e.preventDefault(); setDragOverCol(colId); };
+  const handleDragOver = (e: React.DragEvent, colId: string) => { e.preventDefault(); if (!draggedColumn) setDragOverCol(colId); };
   const handleDragLeave = () => setDragOverCol(null);
   const handleDrop = async (colId: string) => {
     if (!draggedCard) return;
@@ -168,9 +174,39 @@ const KanbanBoard = () => {
     fetchData();
   };
 
+  // === Column Drag & Drop ===
+  const handleColumnDragStart = (e: React.DragEvent, colId: string) => {
+    e.dataTransfer.setData("text/column", colId);
+    setDraggedColumn(colId);
+  };
+  const handleColumnDragOver = (e: React.DragEvent, colId: string) => {
+    e.preventDefault();
+    if (draggedColumn && draggedColumn !== colId) setDragOverColPosition(colId);
+  };
+  const handleColumnDragLeave = () => setDragOverColPosition(null);
+  const handleColumnDrop = async (targetColId: string) => {
+    if (!draggedColumn || draggedColumn === targetColId) {
+      setDraggedColumn(null); setDragOverColPosition(null); return;
+    }
+    const draggedIdx = columns.findIndex(c => c.id === draggedColumn);
+    const targetIdx = columns.findIndex(c => c.id === targetColId);
+    if (draggedIdx === -1 || targetIdx === -1) { setDraggedColumn(null); setDragOverColPosition(null); return; }
+
+    const reordered = [...columns];
+    const [moved] = reordered.splice(draggedIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    // Update positions in DB
+    await Promise.all(reordered.map((col, i) =>
+      supabase.from("kanban_columns").update({ position: i } as any).eq("id", col.id)
+    ));
+    setDraggedColumn(null);
+    setDragOverColPosition(null);
+    fetchData();
+  };
+
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : null;
   const isOverdue = (d: string | null) => d ? new Date(d) < new Date() : false;
-
   const filteredCards = (colId: string) => cards.filter(c => c.column_id === colId && (showArchived ? c.archived : !c.archived));
 
   if (loading) return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -200,15 +236,35 @@ const KanbanBoard = () => {
           {columns.map(col => (
             <div
               key={col.id}
-              className={`w-72 flex-shrink-0 rounded-xl bg-card border transition-colors flex flex-col max-h-full ${dragOverCol === col.id ? "border-primary border-2" : "border-border"}`}
-              onDragOver={(e) => handleDragOver(e, col.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={() => handleDrop(col.id)}
+              draggable
+              onDragStart={(e) => handleColumnDragStart(e, col.id)}
+              onDragEnd={() => { setDraggedColumn(null); setDragOverColPosition(null); }}
+              onDragOver={(e) => {
+                handleDragOver(e, col.id);
+                handleColumnDragOver(e, col.id);
+              }}
+              onDragLeave={() => { handleDragLeave(); handleColumnDragLeave(); }}
+              onDrop={() => {
+                if (draggedColumn) handleColumnDrop(col.id);
+                else handleDrop(col.id);
+              }}
+              className={`w-72 flex-shrink-0 rounded-xl bg-card border transition-all flex flex-col max-h-full ${
+                draggedColumn === col.id ? "opacity-40 scale-95" : ""
+              } ${
+                dragOverColPosition === col.id && draggedColumn ? "border-primary border-2 ring-2 ring-primary/20" :
+                dragOverCol === col.id && !draggedColumn ? "border-primary border-2" : "border-border"
+              }`}
             >
               {/* Column Header */}
-              <div className="px-3 py-2.5 flex items-center justify-between border-b border-border">
+              <div className="px-3 py-2.5 flex items-center justify-between border-b border-border cursor-grab active:cursor-grabbing">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color || "#6b7280" }} />
+                  <GripVertical className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setColorPickerCol(colorPickerCol === col.id ? null : col.id); }}
+                    className="w-3 h-3 rounded-full flex-shrink-0 border border-border/50 hover:scale-125 transition-transform"
+                    style={{ backgroundColor: col.color || "#6b7280" }}
+                    title="Mudar cor"
+                  />
                   {editingColumn === col.id ? (
                     <input
                       value={editColTitle}
@@ -233,6 +289,26 @@ const KanbanBoard = () => {
                 </div>
               </div>
 
+              {/* Color Picker */}
+              {colorPickerCol === col.id && (
+                <div className="px-3 py-2 border-b border-border bg-secondary/50">
+                  <p className="text-[10px] text-muted-foreground mb-1.5">Cor da coluna</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {COLUMN_COLORS.map(c => (
+                      <button
+                        key={c}
+                        onClick={() => updateColumnColor(col.id, c)}
+                        className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${col.color === c ? "border-foreground scale-110" : "border-transparent"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top border accent with column color */}
+              <div className="h-0.5 w-full" style={{ backgroundColor: col.color || "#6b7280" }} />
+
               {/* Cards */}
               <div className="flex-1 overflow-y-auto p-2 space-y-2">
                 <AnimatePresence>
@@ -244,23 +320,19 @@ const KanbanBoard = () => {
                       animate={{ opacity: draggedCard === card.id ? 0.5 : 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       draggable
-                      onDragStart={() => handleDragStart(card.id)}
+                      onDragStart={(e) => { e.stopPropagation(); handleDragStart(card.id); }}
                       onDragEnd={() => { setDraggedCard(null); setDragOverCol(null); }}
                       onClick={() => setEditingCard({ ...card })}
                       className="bg-secondary rounded-lg p-3 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all group"
                     >
-                      {card.label_color && (
-                        <div className="w-full h-1.5 rounded-full mb-2" style={{ backgroundColor: card.label_color }} />
-                      )}
+                      {card.label_color && <div className="w-full h-1.5 rounded-full mb-2" style={{ backgroundColor: card.label_color }} />}
                       {card.label && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded text-white mb-1.5 inline-block" style={{ backgroundColor: card.label_color || "#6b7280" }}>
                           {card.label}
                         </span>
                       )}
                       <p className="text-sm font-medium text-secondary-foreground leading-snug">{card.title}</p>
-                      {card.group_name && (
-                        <p className="text-[10px] text-primary/70 mt-1 flex items-center gap-1"><Users className="w-3 h-3" />{card.group_name}</p>
-                      )}
+                      {card.group_name && <p className="text-[10px] text-primary/70 mt-1 flex items-center gap-1"><Users className="w-3 h-3" />{card.group_name}</p>}
                       {card.module && card.module !== "Geral" && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary inline-block mt-1">{card.module}</span>
                       )}
@@ -356,9 +428,7 @@ const KanbanBoard = () => {
             >
               {/* Modal Header */}
               <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{columns.find(c => c.id === editingCard.column_id)?.title}</span>
-                </div>
+                <span className="text-sm text-muted-foreground">{columns.find(c => c.id === editingCard.column_id)?.title}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => toggleArchive(editingCard)} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted" title={editingCard.archived ? "Restaurar" : "Arquivar"}>
                     {editingCard.archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
@@ -373,30 +443,18 @@ const KanbanBoard = () => {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Title */}
-                <input
-                  value={editingCard.title}
-                  onChange={(e) => setEditingCard({ ...editingCard, title: e.target.value })}
-                  className="w-full text-xl font-bold text-foreground bg-transparent focus:outline-none border-b border-transparent focus:border-primary/30 pb-1"
-                  placeholder="Título do card"
-                />
+                <input value={editingCard.title} onChange={(e) => setEditingCard({ ...editingCard, title: e.target.value })} className="w-full text-xl font-bold text-foreground bg-transparent focus:outline-none border-b border-transparent focus:border-primary/30 pb-1" placeholder="Título do card" />
 
                 {/* Label */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Etiqueta</label>
                   <div className="flex items-center gap-2">
-                    <input
-                      value={editingCard.label || ""}
-                      onChange={(e) => setEditingCard({ ...editingCard, label: e.target.value || null })}
-                      placeholder="Ex: DANILO, ISABELA..."
-                      className="flex-1 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input value={editingCard.label || ""} onChange={(e) => setEditingCard({ ...editingCard, label: e.target.value || null })} placeholder="Ex: DANILO, ISABELA..." className="flex-1 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                     <div className="flex gap-1">
                       {LABEL_COLORS.map(lc => (
                         <button key={lc.value} onClick={() => setEditingCard({ ...editingCard, label_color: lc.value })}
                           className={`w-6 h-6 rounded-full border-2 transition-transform ${editingCard.label_color === lc.value ? "border-white scale-110" : "border-transparent"}`}
-                          style={{ backgroundColor: lc.value }}
-                          title={lc.name}
+                          style={{ backgroundColor: lc.value }} title={lc.name}
                         />
                       ))}
                     </div>
@@ -407,55 +465,30 @@ const KanbanBoard = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Data início</label>
-                    <input
-                      type="date"
-                      value={editingCard.start_date ? editingCard.start_date.split("T")[0] : ""}
-                      onChange={(e) => setEditingCard({ ...editingCard, start_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input type="date" value={editingCard.start_date ? editingCard.start_date.split("T")[0] : ""} onChange={(e) => setEditingCard({ ...editingCard, start_date: e.target.value ? new Date(e.target.value).toISOString() : null })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Data entrega</label>
-                    <input
-                      type="date"
-                      value={editingCard.due_date ? editingCard.due_date.split("T")[0] : ""}
-                      onChange={(e) => setEditingCard({ ...editingCard, due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input type="date" value={editingCard.due_date ? editingCard.due_date.split("T")[0] : ""} onChange={(e) => setEditingCard({ ...editingCard, due_date: e.target.value ? new Date(e.target.value).toISOString() : null })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                 </div>
 
                 {/* Group */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Grupo</label>
-                  <input
-                    value={editingCard.group_name || ""}
-                    onChange={(e) => setEditingCard({ ...editingCard, group_name: e.target.value || null })}
-                    placeholder="Nome do grupo do cliente..."
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
+                  <input value={editingCard.group_name || ""} onChange={(e) => setEditingCard({ ...editingCard, group_name: e.target.value || null })} placeholder="Nome do grupo do cliente..." className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
 
                 {/* Description */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
-                  <textarea
-                    value={editingCard.description || ""}
-                    onChange={(e) => setEditingCard({ ...editingCard, description: e.target.value })}
-                    rows={4}
-                    placeholder="Descreva o acompanhamento do cliente..."
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  />
+                  <textarea value={editingCard.description || ""} onChange={(e) => setEditingCard({ ...editingCard, description: e.target.value })} rows={4} placeholder="Descreva o acompanhamento do cliente..." className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
                 </div>
 
                 {/* Linked Conversation */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Vincular Conversa</label>
-                  <select
-                    value={editingCard.conversation_id || ""}
-                    onChange={(e) => setEditingCard({ ...editingCard, conversation_id: e.target.value || null })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
+                  <select value={editingCard.conversation_id || ""} onChange={(e) => setEditingCard({ ...editingCard, conversation_id: e.target.value || null })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                     <option value="">Nenhuma</option>
                     {conversations.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                   </select>
@@ -464,11 +497,7 @@ const KanbanBoard = () => {
                 {/* Linked Ticket */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Vincular Ticket</label>
-                  <select
-                    value={editingCard.ticket_id || ""}
-                    onChange={(e) => setEditingCard({ ...editingCard, ticket_id: e.target.value || null })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
+                  <select value={editingCard.ticket_id || ""} onChange={(e) => setEditingCard({ ...editingCard, ticket_id: e.target.value || null })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                     <option value="">Nenhum</option>
                     {tickets.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </select>
@@ -477,11 +506,7 @@ const KanbanBoard = () => {
                 {/* Linked Common Error */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Vincular Erro Comum</label>
-                  <select
-                    value={editingCard.common_error_id || ""}
-                    onChange={(e) => setEditingCard({ ...editingCard, common_error_id: e.target.value || null })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
+                  <select value={editingCard.common_error_id || ""} onChange={(e) => setEditingCard({ ...editingCard, common_error_id: e.target.value || null })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                     <option value="">Nenhum</option>
                     {commonErrors.map(ce => <option key={ce.id} value={ce.id}>{ce.title}</option>)}
                   </select>
@@ -490,11 +515,7 @@ const KanbanBoard = () => {
                 {/* Module */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Módulo</label>
-                  <select
-                    value={editingCard.module || "Geral"}
-                    onChange={(e) => setEditingCard({ ...editingCard, module: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
+                  <select value={editingCard.module || "Geral"} onChange={(e) => setEditingCard({ ...editingCard, module: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                     {ECOSYSTEM_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
@@ -502,23 +523,15 @@ const KanbanBoard = () => {
                 {/* Move to column */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Mover para coluna</label>
-                  <select
-                    value={editingCard.column_id}
-                    onChange={(e) => setEditingCard({ ...editingCard, column_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
+                  <select value={editingCard.column_id} onChange={(e) => setEditingCard({ ...editingCard, column_id: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                     {columns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                   </select>
                 </div>
 
                 {/* Save */}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => updateCard(editingCard)} className="flex-1 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90">
-                    Salvar alterações
-                  </button>
-                  <button onClick={() => setEditingCard(null)} className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm hover:bg-muted">
-                    Cancelar
-                  </button>
+                  <button onClick={() => updateCard(editingCard)} className="flex-1 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-medium hover:opacity-90">Salvar alterações</button>
+                  <button onClick={() => setEditingCard(null)} className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm hover:bg-muted">Cancelar</button>
                 </div>
               </div>
             </motion.div>
