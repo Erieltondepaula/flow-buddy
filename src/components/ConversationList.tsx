@@ -78,7 +78,7 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
         <button
           onClick={() => onSelectConversation(null)}
           className="p-2 rounded-lg gradient-primary text-primary-foreground hover:opacity-90"
-          title="Nova conversa"
+          title="Nova conversa (a conversa atual continua aberta)"
         >
           <Plus className="w-4 h-4" />
         </button>
