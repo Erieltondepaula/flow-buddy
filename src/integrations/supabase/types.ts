@@ -97,6 +97,7 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          group_name: string | null
           id: string
           status: string
           ticket_id: string | null
@@ -105,6 +106,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          group_name?: string | null
           id?: string
           status?: string
           ticket_id?: string | null
@@ -113,6 +115,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          group_name?: string | null
           id?: string
           status?: string
           ticket_id?: string | null
