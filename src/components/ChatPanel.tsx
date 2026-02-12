@@ -16,6 +16,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   attachments?: Attachment[];
+  timestamp?: string;
 }
 
 type TicketState = "idle" | "diagnosing" | "awaiting_confirmation" | "resolved" | "escalated";
@@ -98,6 +99,7 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
           role: m.role,
           content: m.content,
           attachments: m.attachments as Attachment[] | undefined,
+          timestamp: m.created_at,
         }))
       );
     } else {
@@ -272,6 +274,7 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
       role: "user",
       content: input,
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+      timestamp: new Date().toISOString(),
     };
 
     const newMessages = [...messages.filter(m => m.id !== "welcome"), userMessage];
@@ -321,7 +324,7 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
       const assistantContent = await streamAI(aiMessages);
 
       // Save assistant message
-      const assistantMsg: Message = { id: Date.now().toString(), role: "assistant", content: assistantContent };
+      const assistantMsg: Message = { id: Date.now().toString(), role: "assistant", content: assistantContent, timestamp: new Date().toISOString() };
       if (convId) await saveMessage(convId, assistantMsg);
 
       // Check if AI asked about resolution
@@ -466,6 +469,13 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
                       </div>
                     ) : msg.content}
                   </div>
+                )}
+                {msg.timestamp && msg.id !== "welcome" && (
+                  <p className={`text-[10px] mt-0.5 ${
+                    msg.role === "user" ? "text-right text-muted-foreground/60" : "text-muted-foreground/60"
+                  }`}>
+                    {new Date(msg.timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 )}
               </div>
               {msg.role === "user" && (
