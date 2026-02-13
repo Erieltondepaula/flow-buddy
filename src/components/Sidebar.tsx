@@ -24,8 +24,8 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
             <Zap className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-sidebar-foreground">Amigo Flow</h1>
-            <p className="text-xs text-sidebar-foreground/50">Suporte Técnico IA</p>
+            <h1 className="text-lg font-bold text-sidebar-foreground">Suporte IA</h1>
+            <p className="text-xs text-sidebar-foreground/50">Central de Atendimento</p>
           </div>
         </div>
       </div>
@@ -63,7 +63,7 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
           <HelpCircle className="w-5 h-5 text-sidebar-primary" />
           <div>
             <p className="text-xs font-medium text-sidebar-foreground">Precisa de ajuda?</p>
-            <p className="text-xs text-sidebar-foreground/50">docs.amigoflow.com</p>
+            <p className="text-xs text-sidebar-foreground/50">Central de ajuda</p>
           </div>
         </div>
       </div>

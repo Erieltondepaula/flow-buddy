@@ -34,7 +34,7 @@ const WELCOME_MSG: Message = {
   id: "welcome",
   role: "assistant",
   content:
-    "Olá! Sou o **Especialista de Suporte Técnico do Amigo Flow**. Posso ajudá-lo com:\n\n• Configuração de canais e templates\n• Diagnóstico de erros comuns\n• Otimização de fluxos de atendimento\n• Dúvidas sobre Leads, Pacientes, Agentes e Setores\n\n📎 Você pode anexar **imagens, áudios, vídeos e documentos** para eu analisar.\n\nComo posso ajudar você hoje?",
+    "Olá! Sou o **Especialista de Suporte Técnico**. Posso ajudá-lo com:\n\n• Configuração de canais e templates\n• Diagnóstico de erros comuns\n• Otimização de fluxos de atendimento\n• Dúvidas sobre Leads, Pacientes, Agentes e Setores\n\n📎 Você pode anexar **imagens, áudios, vídeos e documentos** para eu analisar.\n\nComo posso ajudar você hoje?",
 };
 
 const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdated }: ChatPanelProps) => {
@@ -87,7 +87,10 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
     if (conv) {
       if (conv.status === "resolved") setTicketState("resolved");
       else if (conv.status === "escalated") setTicketState("escalated");
-      else setTicketState("idle");
+      else {
+        // Check if the last assistant message asked about resolution - restore awaiting_confirmation
+        setTicketState("idle");
+      }
       setCurrentTicketId(conv.ticket_id as string | null);
       setGroupName((conv as any).group_name || "");
     }
@@ -100,15 +103,25 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
       .order("created_at", { ascending: true });
 
     if (msgs && msgs.length > 0) {
-      setMessages(
-        msgs.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          attachments: m.attachments as Attachment[] | undefined,
-          timestamp: m.created_at,
-        }))
-      );
+      const loadedMessages = msgs.map((m: any) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        attachments: m.attachments as Attachment[] | undefined,
+        timestamp: m.created_at,
+      }));
+      setMessages(loadedMessages);
+      
+      // If conversation is active and last assistant message asks about resolution, restore awaiting_confirmation
+      if (conv && conv.status === "active") {
+        const lastAssistant = [...loadedMessages].reverse().find(m => m.role === "assistant");
+        if (lastAssistant) {
+          const lower = lastAssistant.content.toLowerCase();
+          if (lower.includes("problema foi resolvido") || lower.includes("resolvido?") || lower.includes("você conseguiu")) {
+            setTicketState("awaiting_confirmation");
+          }
+        }
+      }
     } else {
       setMessages([WELCOME_MSG]);
     }

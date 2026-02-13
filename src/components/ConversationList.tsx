@@ -1,7 +1,8 @@
-import { MessageSquare, Plus, Clock, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { MessageSquare, Plus, Clock, CheckCircle2, AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Conversation {
   id: string;
@@ -69,6 +70,18 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
     return () => { delete (window as any).__refetchConversations; };
   }, []);
 
+  const deleteConversation = async (e: React.MouseEvent, convId: string) => {
+    e.stopPropagation();
+    // Delete messages first, then conversation
+    await supabase.from("conversation_messages").delete().eq("conversation_id", convId);
+    await supabase.from("conversations").delete().eq("id", convId);
+    if (activeConversationId === convId) {
+      onSelectConversation(null);
+    }
+    toast.success("Conversa removida");
+    fetchConversations();
+  };
+
   const formatDate = (d: string) =>
     new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -106,7 +119,7 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
                   onClick={() => onSelectConversation(conv.id)}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group relative ${
                     isActive
                       ? "bg-primary/10 border border-primary/20"
                       : "hover:bg-muted"
@@ -115,7 +128,7 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
                   <div className="flex items-start gap-2">
                     <StatusIcon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${statusColors[conv.status]}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{conv.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate pr-6">{conv.title}</p>
                       {conv.group_name && (
                         <p className="text-[10px] text-primary/70 truncate">👥 {conv.group_name}</p>
                       )}
@@ -124,6 +137,13 @@ const ConversationList = ({ activeConversationId, onSelectConversation }: Conver
                         <span className={`text-xs ${statusColors[conv.status]}`}>{statusLabels[conv.status]}</span>
                       </div>
                     </div>
+                    <button
+                      onClick={(e) => deleteConversation(e, conv.id)}
+                      className="absolute right-2 top-2.5 p-1 rounded-md text-muted-foreground/0 group-hover:text-muted-foreground hover:!text-destructive hover:bg-destructive/10 transition-all"
+                      title="Remover conversa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </motion.button>
               );

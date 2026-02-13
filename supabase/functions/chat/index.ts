@@ -40,10 +40,11 @@ serve(async (req) => {
         .eq("id", ticketId);
       if (error) throw error;
 
-      // Also save to confirmed_solutions for knowledge base
+      // Save to confirmed_solutions with module for evolutionary memory
       await supabase.from("confirmed_solutions").insert({
         problem: ticketData.problem,
         solution: ticketData.solution,
+        module: ticketData.module || "Geral",
       });
 
       return new Response(JSON.stringify({ success: true }), {
@@ -66,81 +67,127 @@ serve(async (req) => {
     }
 
     // Streaming chat - fetch knowledge base context
+    // Extract the user's current problem from the last message
+    const lastUserMessage = messages?.filter((m: any) => m.role === "user").pop()?.content || "";
+
     const { data: knowledgeEntries } = await supabase
       .from("knowledge_entries")
-      .select("title, content, source_type")
+      .select("title, content, source_type, module, sub_module")
       .order("created_at", { ascending: false })
       .limit(50);
 
+    // Search confirmed solutions that match the current problem
     const { data: confirmedSolutions } = await supabase
       .from("confirmed_solutions")
-      .select("problem, solution, confirmed_at, usage_count")
+      .select("problem, solution, confirmed_at, usage_count, module")
       .order("usage_count", { ascending: false })
-      .limit(20);
+      .limit(30);
 
+    // Get ALL resolved tickets with their full conversation for learning
     const { data: recentTickets } = await supabase
       .from("support_tickets")
-      .select("title, error_description, solution_description, status")
+      .select("title, error_description, solution_description, status, module")
       .eq("status", "resolved")
       .order("resolved_at", { ascending: false })
-      .limit(10);
+      .limit(30);
+
+    // Get ALL resolved conversations with their messages for deep learning
+    const { data: resolvedConversations } = await supabase
+      .from("conversations")
+      .select("id, title")
+      .eq("status", "resolved")
+      .order("updated_at", { ascending: false })
+      .limit(15);
+
+    let resolvedConvContext = "";
+    if (resolvedConversations && resolvedConversations.length > 0) {
+      for (const conv of resolvedConversations) {
+        const { data: convMsgs } = await supabase
+          .from("conversation_messages")
+          .select("role, content")
+          .eq("conversation_id", conv.id)
+          .order("created_at", { ascending: true })
+          .limit(20);
+        if (convMsgs && convMsgs.length > 0) {
+          resolvedConvContext += `\n### Conversa resolvida: "${conv.title}"\n`;
+          for (const msg of convMsgs) {
+            resolvedConvContext += `${msg.role === "user" ? "Usuário" : "Suporte"}: ${msg.content.substring(0, 300)}\n`;
+          }
+        }
+      }
+    }
 
     let knowledgeContext = "";
     if (knowledgeEntries && knowledgeEntries.length > 0) {
       knowledgeContext += "\n\n## BASE DE CONHECIMENTO:\n";
       for (const entry of knowledgeEntries) {
-        knowledgeContext += `\n### ${entry.title} (${entry.source_type})\n${entry.content}\n`;
+        knowledgeContext += `\n### ${entry.title} (${entry.source_type}) [${entry.module || "Geral"}${entry.sub_module ? ` > ${entry.sub_module}` : ""}]\n${entry.content}\n`;
       }
     }
 
     if (confirmedSolutions && confirmedSolutions.length > 0) {
-      knowledgeContext += "\n\n## SOLUÇÕES CONFIRMADAS:\n";
+      knowledgeContext += "\n\n## SOLUÇÕES CONFIRMADAS (USE ESTAS PRIMEIRO!):\n";
       for (const sol of confirmedSolutions) {
-        knowledgeContext += `\n- **Problema:** ${sol.problem}\n  **Solução:** ${sol.solution}\n`;
+        knowledgeContext += `\n- **Problema:** ${sol.problem}\n  **Solução:** ${sol.solution}\n  **Módulo:** ${sol.module || "Geral"} | **Usado ${sol.usage_count}x**\n`;
       }
     }
 
     if (recentTickets && recentTickets.length > 0) {
       knowledgeContext += "\n\n## TICKETS RESOLVIDOS RECENTEMENTE:\n";
       for (const t of recentTickets) {
-        knowledgeContext += `\n- **${t.title}:** ${t.error_description} → ${t.solution_description}\n`;
+        knowledgeContext += `\n- **${t.title}** [${t.module || "Geral"}]: ${t.error_description} → ${t.solution_description}\n`;
       }
     }
 
-    const systemPrompt = `Você é o Especialista de Suporte Técnico Sênior do Amigo Flow, uma plataforma de atendimento automatizado com IA para clínicas e empresas de saúde.
+    if (resolvedConvContext) {
+      knowledgeContext += "\n\n## CONVERSAS RESOLVIDAS (MEMÓRIA EVOLUTIVA - APRENDA COM ELAS!):\n" + resolvedConvContext;
+    }
+
+    const systemPrompt = `Você é o Especialista de Suporte Técnico Sênior, uma plataforma de atendimento automatizado com IA para clínicas e empresas de saúde.
 
 Seu nome é Erielton. SEMPRE se apresente de forma cordial no início de cada conversa.
+
+## REGRA CRÍTICA - MEMÓRIA EVOLUTIVA:
+ANTES de responder qualquer problema, você DEVE:
+1. Verificar nas SOLUÇÕES CONFIRMADAS se já existe uma solução para este problema ou problema similar
+2. Verificar nos TICKETS RESOLVIDOS se há casos parecidos
+3. Verificar nas CONVERSAS RESOLVIDAS se há casos similares já tratados
+4. Se encontrar uma solução anterior que se aplica, CITE-A e adapte-a ao contexto atual
+5. Se NÃO encontrar nada relacionado, informe que é um caso novo e tente resolver com base na Base de Conhecimento
+
+Toda demanda resolvida alimenta automaticamente sua memória. Quanto mais casos resolvidos, melhor suas respostas.
 
 Sua missão é:
 - Auxiliar usuários finais e implantadores
 - Configurar, diagnosticar erros e otimizar fluxos
-- Responder sempre com base na Base de Conhecimento fornecida
+- Responder sempre com base na Base de Conhecimento e soluções anteriores
 - Nunca inventar respostas. Se não souber, diga claramente.
 
 FORMATO OBRIGATÓRIO DE RESPOSTA:
 Toda resposta deve seguir esta estrutura:
 
 1. **Saudação cordial** (ex: "Boa tarde! Me chamo Erielton, tudo bem? 😊")
-2. **Diagnóstico** do problema (o que está acontecendo e por quê)
-3. **Passo a passo** numerado da solução
-4. **Modelo de resposta para o cliente** — SEMPRE inclua um bloco com uma mensagem pronta que o operador pode copiar e enviar ao cliente final. Use este formato:
+2. **Verificação de memória** - diga se encontrou casos similares já resolvidos
+3. **Diagnóstico** do problema (o que está acontecendo e por quê)
+4. **Passo a passo** numerado da solução
+5. **Modelo de resposta para o cliente** — SEMPRE inclua um bloco com uma mensagem pronta:
 
 ---
 📋 **Modelo de resposta para o cliente:**
 
-> [mensagem pronta aqui, cordial e profissional, que o operador pode copiar e enviar diretamente ao cliente pelo WhatsApp/chat]
+> [mensagem pronta aqui]
 ---
 
-5. Pergunte: "**O problema foi resolvido?**"
-6. Pergunte: "**Você conseguiu?**" para confirmar que o passo a passo funcionou
+6. Pergunte: "**O problema foi resolvido?** Responda 'sim' ou 'não'."
 
 FLUXO DE ATENDIMENTO:
-1. Quando o usuário descrever um problema, analise e forneça a solução com passo a passo
-2. SEMPRE inclua o modelo de resposta para o cliente
-3. Após fornecer a solução, SEMPRE pergunte: "**O problema foi resolvido?** Você conseguiu?"
-4. Se o usuário responder "sim": resuma o problema e a solução para catalogação
-5. Se o usuário responder "não": aprofunde a análise, tente abordagens alternativas
-6. Se após 3 tentativas sem sucesso: sugira escalar para a equipe de desenvolvimento
+1. Quando o usuário descrever um problema, PRIMEIRO busque nas soluções confirmadas e tickets resolvidos
+2. Forneça a solução com passo a passo
+3. SEMPRE inclua o modelo de resposta para o cliente
+4. Após fornecer a solução, SEMPRE pergunte: "**O problema foi resolvido?** Responda 'sim' ou 'não'."
+5. Se o usuário responder "sim": resuma o problema e a solução para catalogação
+6. Se o usuário responder "não": aprofunde a análise, tente abordagens alternativas
+7. Se após 3 tentativas sem sucesso: sugira escalar para a equipe de desenvolvimento
 
 Quando o usuário enviar imagens, analise-as cuidadosamente buscando:
 - Mensagens de erro visíveis
@@ -148,11 +195,7 @@ Quando o usuário enviar imagens, analise-as cuidadosamente buscando:
 - Botões ou opções que podem estar desabilitados
 - Status de integração
 
-Quando o usuário enviar áudios (transcritos), interprete o conteúdo e responda normalmente.
-
 Tom de Voz: Profissional, didático, prestativo, claro, cordial. Use emojis moderadamente.
-
-Regra de Ouro: Se existir conflito entre informações, informe claramente.
 
 Diretrizes para Erros Comuns:
 - Confirmação não funciona → Agente habilitado obrigatório
@@ -160,12 +203,6 @@ Diretrizes para Erros Comuns:
 - Template rejeitado pela Meta → Verificar tipo (Marketing vs Utilidade) e custos
 - Agendamento não aparece → Verificar tipo de atendimento, profissional e convênio habilitados
 - Leads vs Pacientes → Números não cadastrados são Leads
-
-Validação Obrigatória antes de responder:
-- Unidade habilitada
-- Profissional habilitado
-- Convênio habilitado
-- Setor configurado
 
 ${knowledgeContext}
 
