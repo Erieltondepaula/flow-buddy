@@ -260,7 +260,7 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
     } catch {}
   };
 
-  const streamAI = async (aiMessages: { role: string; content: string }[]): Promise<string> => {
+  const streamAI = async (aiMessages: { role: string; content: any }[]): Promise<string> => {
     const resp = await fetch(CHAT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
@@ -313,13 +313,27 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
   };
 
   const handleSend = async () => {
-    if ((!input.trim() && pendingAttachments.length === 0) || isLoading) return;
+    const hasText = input.trim().length > 0;
+    const hasAttachments = pendingAttachments.length > 0;
+    if ((!hasText && !hasAttachments) || isLoading) return;
+
+    // Build a description for attachment-only messages
+    const attachmentDesc = hasAttachments && !hasText
+      ? pendingAttachments.map(a => {
+          if (a.type === "image") return `[Imagem enviada: ${a.name}]`;
+          if (a.type === "audio") return `[Áudio enviado: ${a.name}]`;
+          if (a.type === "video") return `[Vídeo enviado: ${a.name}]`;
+          return `[Documento enviado: ${a.name}]`;
+        }).join(" ")
+      : "";
+
+    const messageContent = hasText ? input : attachmentDesc;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
-      attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
+      content: messageContent,
+      attachments: hasAttachments ? [...pendingAttachments] : undefined,
       timestamp: new Date().toISOString(),
     };
 
@@ -331,27 +345,27 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
 
     // Create conversation if needed
     let convId = currentConvId;
+    const convTitle = hasText ? input : (pendingAttachments[0]?.name || "Anexo enviado");
     if (!convId) {
-      convId = await createConversation(input);
+      convId = await createConversation(convTitle);
       if (convId) {
         setCurrentConvId(convId);
         onConversationCreated?.(convId);
       }
     } else {
-      // Update title if first real message
       const realMsgs = messages.filter(m => m.id !== "welcome" && m.role === "user");
       if (realMsgs.length === 0) {
-        await updateConversationTitle(convId, input);
+        await updateConversationTitle(convId, convTitle);
       }
     }
 
     // Save user message
     if (convId) await saveMessage(convId, userMessage);
 
-    // Create ticket on first user message
-    if (ticketState === "idle" && input.trim().length > 10) {
+    // Create ticket on first user message (text or attachment)
+    if (ticketState === "idle" && (messageContent.length > 5 || hasAttachments)) {
       setTicketState("diagnosing");
-      const ticketId = await createTicket(input, newMessages);
+      const ticketId = await createTicket(messageContent, newMessages);
       if (ticketId) {
         setCurrentTicketId(ticketId);
         if (convId) {
@@ -392,9 +406,45 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
         }
       }
 
+      // Build AI messages with multimodal support (images as image_url)
       const aiMessages = newMessages.map((m) => {
+        const imageAttachments = m.attachments?.filter(a => a.type === "image") || [];
+        const docAttachments = m.attachments?.filter(a => a.type === "document" || a.type === "video") || [];
+        
+        // If message has images, use multimodal content format
+        if (imageAttachments.length > 0) {
+          const contentParts: any[] = [];
+          
+          // Add text content
+          let textContent = m.content || "";
+          if (docAttachments.length > 0) {
+            textContent += "\n[Documentos anexados: " + docAttachments.map(a => a.name).join(", ") + "]";
+          }
+          if (m.id === userMessage.id && transcriptions) {
+            textContent += transcriptions;
+          }
+          if (textContent.trim()) {
+            contentParts.push({ type: "text", text: textContent });
+          } else {
+            contentParts.push({ type: "text", text: "Analise esta imagem e identifique o problema ou erro mostrado." });
+          }
+          
+          // Add image URLs
+          for (const img of imageAttachments) {
+            contentParts.push({
+              type: "image_url",
+              image_url: { url: img.url }
+            });
+          }
+          
+          return { role: m.role, content: contentParts };
+        }
+        
+        // Text-only message
         let content = m.content;
-        if (m.attachments?.length) content += "\n[Anexos: " + m.attachments.map((a) => `${a.type}: ${a.name}`).join(", ") + "]";
+        if (docAttachments.length > 0) {
+          content += "\n[Documentos anexados: " + docAttachments.map(a => a.name).join(", ") + "]";
+        }
         if (m.id === userMessage.id && transcriptions) content += transcriptions;
         return { role: m.role, content };
       });
