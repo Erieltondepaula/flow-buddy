@@ -204,19 +204,45 @@ const ChatPanel = ({ conversationId, onConversationCreated, onConversationUpdate
     } catch { return null; }
   };
 
-  const resolveTicket = async (problem: string, solution: string, conversation: Message[]) => {
-    if (!currentTicketId) return;
+  const resolveTicket = async (problem: string, solution: string, conversation: Message[], module?: string) => {
+    // Try to get ticketId from state or from conversation
+    let ticketId = currentTicketId;
+    if (!ticketId && currentConvId) {
+      const { data: conv } = await supabase
+        .from("conversations")
+        .select("ticket_id")
+        .eq("id", currentConvId)
+        .single();
+      if (conv?.ticket_id) {
+        ticketId = conv.ticket_id;
+        setCurrentTicketId(ticketId);
+      }
+    }
+    if (!ticketId) {
+      console.error("resolveTicket: no ticketId found");
+      toast.error("Erro: ticket não encontrado para resolver.");
+      return;
+    }
     try {
-      await fetch(CHAT_URL, {
+      const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
         body: JSON.stringify({
-          action: "resolve_ticket", ticketId: currentTicketId,
-          ticketData: { problem, solution, conversation: conversation.map((m) => ({ role: m.role, content: m.content })) },
+          action: "resolve_ticket", ticketId,
+          ticketData: { problem, solution, module: module || "Geral", conversation: conversation.map((m) => ({ role: m.role, content: m.content })) },
         }),
       });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        console.error("resolveTicket error:", errData);
+        toast.error("Erro ao resolver ticket.");
+        return;
+      }
       toast.success("✅ Ticket resolvido e catalogado!");
-    } catch {}
+    } catch (e) {
+      console.error("resolveTicket exception:", e);
+      toast.error("Erro ao resolver ticket.");
+    }
   };
 
   const escalateTicket = async (conversation: Message[]) => {
